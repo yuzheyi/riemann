@@ -1,0 +1,32 @@
+#include <iostream>
+#include <vector>
+
+// 定义网格和物理参数
+const int numCells = 100;
+const double cellSize = 1.0;
+const double totalTime = 10.0;
+const double timeStep = 0.1;
+
+// 定义初始条件
+std::vector<double> density(numCells, 1.0);
+std::vector<double> velocity(numCells, 0.0);
+
+// 主时间循环
+for (double t = 0; t < totalTime; t += timeStep) {
+    // 计算通量、源项等
+    for (int cell = 1; cell < numCells - 1; cell++) {
+        double flux = ... // 计算通量
+        double source = ... // 计算源项
+        // 更新密度和速度
+        density[cell] += (flux - source) * (timeStep / cellSize);
+        velocity[cell] = density[cell] / area; // 更新速度
+    }
+
+    // 处理边界条件
+    density[0] = ...;
+    velocity[0] = ...;
+    density[numCells - 1] = ...;
+    velocity[numCells - 1] = ...;
+}
+
+// 输出结果或进行其他后处理
