@@ -4,7 +4,7 @@ project(Riemann)
 include(CTest)
 enable_testing()
 
-include_directories(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+include_directories(${CMAKE_CPP_IMPLICIT_INCLUDE_DIRECTORIES})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})

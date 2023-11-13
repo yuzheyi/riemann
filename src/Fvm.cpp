@@ -1,6 +1,6 @@
 #include "Fvm.h"
 #include <cmath>
-
+#include<iostream>
 
 void pointToCell(Point* points,int number,Face* faces, Cell* cells)
 {
@@ -32,3 +32,7 @@ void pointToFace(Point* points, int number,Face* faces)
         count++;
     }
 }
+
+
+
+ 
