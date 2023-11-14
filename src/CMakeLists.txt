@@ -1,16 +1,17 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.22)
 project(Riemann)
 
 include(CTest)
 enable_testing()
 
-include_directories(${CMAKE_CPP_IMPLICIT_INCLUDE_DIRECTORIES})
+include_directories(${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})
 set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
 include(CPack)
 set(CMAKE_CPP_STANDARD 17)
 set( CMAKE_BUILD_TYPE "Debug" )
+
 # FILEPATH: /c:/Users/YUJJ/Desktop/riemann/CMakeLists.txt
 
 # Add all source files in this directory and its subdirectories to the SOURCES variable

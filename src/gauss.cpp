@@ -1,16 +1,18 @@
 #include "gauss.h"
-#include<iostream>
+#include <iostream>
 #include <cmath>
 #include <vector>
 
-void gaussSolver(double* a, double* b,Cell* cells,int cols,int raws) //a 为方阵 ，b 为列向量
+void gaussSolver(std::vector<std::vector<double>>& a, std::vector<double>& b,std::vector<Cell>& cells) //a 为方阵 ，b 为列向量
 //求线性方程组的解(ax=b ,求 x)，矩阵 a 为方阵并且方程组有唯一解时返回 true
 {
 	/*构造增广矩阵*/
-	double augmat[raws][cols+1];
+	int raws=a.size();
+	int cols=a[0].size();
+	std::vector<std::vector<double>> augmat(raws, std::vector<double>(cols+1, 0.0));
 	for (int i = 0; i < raws; i++) {
 		for (int j = 0; j < cols; j++) {
-			augmat[i][j] = a[i * cols + j];
+			augmat[i][j] = a[i][j];
 		}
 	}
 	for (int i = 0; i < raws; i++) {
@@ -31,6 +33,7 @@ void gaussSolver(double* a, double* b,Cell* cells,int cols,int raws) //a 为方�
 	//下面代码将增广矩阵化为上三角矩阵，并判断增广矩阵秩是否为 n
 	for (int i = 0; i < cols; i++)
 	{
+		std::cout << "上三角矩阵化简第："<<i<<"列"<<std::endl; 
 		//寻找第 i 列不为零的元素
 		int k;
 		for (k = i; k < cols; k++)
@@ -47,8 +50,8 @@ void gaussSolver(double* a, double* b,Cell* cells,int cols,int raws) //a 为方�
 			for (int j = i + 1; j < cols; j++)
 			{
 				double c = -augmat[j][i] / augmat[i][i];
-				double* row_i = augmat[i]; // 指向第 i 行
-    			double* row_j = augmat[j]; // 指向第 j 行
+				std::vector<double>& row_i = augmat[i]; // 指向第 i 行
+    			std::vector<double>& row_j = augmat[j]; // 指向第 j 行
     			for (k = i; k < cols + 1; k++) 
 				{
         			row_j[k] += c * row_i[k];
@@ -64,6 +67,7 @@ void gaussSolver(double* a, double* b,Cell* cells,int cols,int raws) //a 为方�
 	//自下而上求解
 	for (int i = raws-1; i >= 0; i--)
 	{
+		std::cout << "求解第："<<i<<"列"<<std::endl; 
 		double result = augmat[i][cols];
 		for (int j = raws-1; j > i; j--)
 		{

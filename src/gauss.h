@@ -1,9 +1,6 @@
-#include<iostream>
-#include <cmath>
-#include <vector>
+#include "Fvm.h"
 
-
-void gaussSolver(double* a, double* b,Cell* cells,int cols,int raws)
+void gaussSolver(std::vector<std::vector<double>>& a, std::vector<double>& b,std::vector<Cell>& cells); //a 为方阵 ，b 为列向量
 
  
 

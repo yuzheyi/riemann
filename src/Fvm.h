@@ -1,3 +1,4 @@
+#include <vector>
 #ifndef FVM_H
 #define FVM_H
 
@@ -20,9 +21,13 @@ struct Cell {
 };
 
 
- 
-void pointToFace(Point* points, int number,Face* faces);
-void pointToCell(Point* points,int number,Face* faces,Cell* cells);; 
+void pointToFace(const std::vector<Point>& points, std::vector<Face>& faces);
+void pointToCell(const std::vector<Point>& points, const std::vector<Face>& faces, std::vector<Cell>& cells);
+
+
+
+// void pointToFace(Point* points, int number,Face* faces);
+// void pointToCell(Point* points,int number,Face* faces,Cell* cells);
 //定义梯度和散度
 
 
