@@ -1,0 +1,225 @@
+#include <iostream>
+#include <vector>
+#include "Fvm/Fvm.h"
+// #include "GaussSolver/gauss.h"
+#include <cmath>
+#include <Eigen/Sparse>
+#include <Eigen/SparseLU>
+#include <fstream>
+
+#include <omp.h>
+
+/**
+ * @brief The main function generates grid points, constructs faces and cells.
+ * 
+ * @return int 
+ */
+
+
+
+
+int main(){
+    //生成一维网格点
+    const int number=100;
+    // std::cout << "输入节点数: ";
+    // std::cin >> number;
+
+    std::vector<Point> mypoints(number);
+    int count = 0;
+    //定义
+    double positionRange=1; //定义实际跨越范围
+    double deltaT = 0.001 ;//定义时间步长
+    double totalT = 0.5; //定义总时间
+    double Rg = 287; //气体常数
+    // std::cout << "输入实际跨越范围: ";
+    // std::cin >> positionRange;
+    while (count < number) {
+        mypoints[count].position = positionRange/(number-1)*count;
+        // std::cout << mypoints[count].position << std::endl;
+        count++;
+    }
+    
+    
+
+    //生成网格点
+    std::vector<Face> faces(number);//定义面
+    int test = faces.size();
+    // Face faces[number]; 
+    pointToFace(mypoints,faces);//构造面
+    std::vector<Cell> cells(number-1);
+    // Cell cells[number-1];//定义体
+    pointToCell(mypoints,faces,cells);//构造体
+    std::cout << "网格生成完成"<<std::endl;
+
+    /*初始化*/
+    for (int i = 0; i < number; i++) {
+        faces[i].velocity = 0;
+        cells[i].P = 101325;
+        cells[i].velocity = 0;
+        cells[i].T = 300;
+        cells[i].rho = 1/(Rg*cells[i].T)*cells[i].P;
+        std::cout <<","<<i<<":"<<cells[i].P ;
+    }
+    // Define boundary conditions (first type boundary)
+    faces[0].velocity = 1;
+    faces[number-1].velocity = 1;
+
+    for (int i = 0; i < number/2; i++) {
+
+        cells[i].velocity = -1;
+    }
+    
+    for (int i = number; i > number/2; i--) {
+
+        cells[i].velocity = 1;
+    }
+    for (int i = 0; i < number-1; i++) {
+
+        cells[i].velocity = sin(2*3.1415926*cells[i].position);
+    }
+    std::cout <<"初始化完成"<<std::endl;
+   
+
+
+    for(int i = 0; i < totalT/deltaT; i++)//总时间迭代
+    {
+        std::cout <<"当前时间步："<<i*deltaT<<std::endl;
+        cells[0].P = 101325;
+        cells[0].T = 300;
+        // cells[0].velocity = 1;
+        cells[0].velocity = cells[1].velocity;
+        cells[0].rho = cells[0].P/Rg/cells[0].T ;
+        // cells[0].velocity = 1 ;
+        cells[number-2].P = 101325;
+        cells[number-2].T = 300;
+        cells[number-2].rho = cells[number-2].P/Rg/cells[number-2].T ;
+        cells[number-2].velocity = cells[number-3].velocity;
+
+
+        Eigen::Matrix<double,number-1 , 1>  temp;
+        for(int j = 1; j < number-1; j++)//面迭代
+        {
+            double div[2] = {(faces[j].position - cells[j-1].position), (faces[j].position - cells[j].position)};
+            double normal[2] = {div[0] / fabs(div[0]),
+                                div[1] / fabs(div[1])};
+
+            // 定义守恒量和物理量的数组
+            const int numVariables = 1;  // 数组的大小(只计算速度)
+            const int numCells = 2;     //依赖的网格数量
+            Eigen::Matrix<double, numVariables, numCells> U;   // 守恒量构造
+            Eigen::Matrix<double, numVariables, numCells> F;   // 物理量构造
+
+            
+            
+            // 初始化示例矩阵 M，这里假设 M 是一个 3x1 的矩阵
+
+            for (int k = 0; k < numCells; ++k) {
+                // 当前单元的索引
+                int currentCellIndex = j - 1 + k;
+                // 获取当前单元的物理量
+                double rho = cells[currentCellIndex].rho;
+                double velocity = cells[currentCellIndex].velocity;
+                double energy = cells[currentCellIndex].T*717;
+                double P = cells[currentCellIndex].P;
+                // 计算物理量 F 
+                F.col(k) << velocity;
+                }
+
+            // // //FTCS（Forward time central space）格式:
+            // Eigen::Matrix<double, numCells, 1> M1;//对流项矩阵
+            // M1 << 0.5,
+            // 0.5;
+
+            //LF格式
+            // double A = 0.5*(cells[j-1].velocity+cells[j].velocity);
+            // Eigen::Matrix<double, numCells, 1> M1;//对流项矩阵
+            // M1 << 0.5*A+0.5*div[0]/deltaT,
+            // 0.5*A+0.5*div[1]/deltaT;
+
+
+            //迎风格式
+            double A = 0.5*(cells[j-1].velocity+cells[j].velocity);
+            Eigen::Matrix<double, numCells, 1> M1;//对流项矩阵
+            if(A<0)
+            {
+                M1 << 
+                0,
+                A;
+            }
+            else//A>=0
+            {
+                M1 << 
+                A,
+                0;
+
+            }
+
+
+            // //Lax-Wendroff 格式
+            // Eigen::Matrix<double, numCells, 1> M0;//对流项矩阵
+            //     M0 << 
+            //     0.5+0.25*deltaT/div[0],
+            //     0.5+0.25*deltaT/div[1];
+            // faces[j].velocity=F * M0;
+            // double A = 0.5*(cells[j-1].velocity+cells[j].velocity);
+            // Eigen::Matrix<double, numCells, 1> M1;//对流项矩阵
+            //     M1 << 
+            //     0.5*A+0.5*A*A*deltaT/div[0],
+            //     0.5*A+0.5*A*A*deltaT/div[1];
+
+            //通用计算格式
+            faces[j].velocity =F * M1;
+        }
+
+
+        int j =0;
+        std::cout <<"单元速度："<<cells[j].velocity<<",";
+        for( j = 0; j < number-2; j++)//单元迭代
+        {
+            double div[2]= {(cells[j].position - cells[j].faces[0]->position), (cells[j].position - cells[j].faces[1]->position)};
+            double normal[2]={div[0] / fabs(div[0])*cells[j].faces[0]->area,
+                                div[1] / fabs(div[1])*cells[j].faces[1]->area};
+            cells[j].velocity = cells[j].velocity + deltaT/cells[j].volume*(normal[0]*cells[j].faces[0]->velocity+normal[1]*cells[j].faces[1]->velocity);
+            std::cout<<cells[j].velocity<<",";
+        }
+        j =number-2;
+        std::cout<<cells[j].velocity<<std::endl;
+
+        
+
+
+
+        std::fstream f;
+        f.open("cell_data.csv",std::ios::out|std::ios::app);
+        // 遍历 vector，并将每个 Cell 的 position 和 physics 写入文件
+        f << i*deltaT ;
+        for (const auto& cell : cells) {
+            f << ","<< cell.velocity ;
+        }
+        f <<std::endl;
+        // 关闭文件
+        f.close();
+
+    }
+
+    // 写入 position 和 physics 到文件
+
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

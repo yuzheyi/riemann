@@ -1,0 +1,288 @@
+#include <iostream>
+#include <vector>
+#include "Fvm/Fvm.h"
+// #include "GaussSolver/gauss.h"
+#include <cmath>
+#include <Eigen/Sparse>
+#include <Eigen/SparseLU>
+#include <fstream>
+
+#include <omp.h>
+
+/**
+ * @brief The main function generates grid points, constructs faces and cells.
+ * 
+ * @return int 
+ */
+
+
+
+
+int main(){
+    //生成一维网格点
+    const int number=7;
+    // std::cout << "输入节点数: ";
+    // std::cin >> number;
+
+    std::vector<Point> mypoints(number);
+    int count = 0;
+    //定义
+    double positionRange=number-1; //定义实际跨越范围
+    double deltaT = 0.01 ;//定义时间步长
+    double totalT = 10.0; //定义总时间
+    double Rg = 287; //气体常数
+    // std::cout << "输入实际跨越范围: ";
+    // std::cin >> positionRange;
+    while (count < number) {
+        mypoints[count].position = positionRange/(number-1)*count;
+        // std::cout << mypoints[count].position << std::endl;
+        count++;
+    }
+    
+    
+
+    //生成网格点
+    std::vector<Face> faces(number);//定义面
+    int test = faces.size();
+    // Face faces[number]; 
+    pointToFace(mypoints,faces);//构造面
+    std::vector<Cell> cells(number-1);
+    // Cell cells[number-1];//定义体
+    pointToCell(mypoints,faces,cells);//构造体
+    std::cout << "网格生成完成"<<std::endl;
+
+    /*初始化*/
+    for (int i = 0; i < number; i++) {
+        faces[i].physics = 0;
+
+        cells[i].P = 101325;
+        cells[i].velocity = 0;
+        cells[i].T = 300;
+        cells[i].rho = 1/(Rg*cells[i].T)*cells[i].P;
+        std::cout <<","<<i<<":"<<cells[i].P ;
+    }
+
+    // Define boundary conditions (first type boundary)
+    faces[0].physics = 1;
+    faces[number-1].physics = 1;
+    
+    std::cout <<"初始化完成"<<std::endl;
+   
+
+
+    for(int i = 0; i < totalT/deltaT; i++)//总时间迭代
+    {
+        std::cout <<"当前时间步："<<i*deltaT<<std::endl;
+        cells[0].P = 101325;
+        cells[0].T = 300;
+        cells[0].rho = cells[0].P/Rg/cells[0].T ;
+        cells[0].velocity = 1 ;
+        cells[number-2].P = 101325;
+        cells[number-2].T = 300;
+        cells[number-2].rho = cells[number-2].P/Rg/cells[number-2].T ;
+        cells[number-2].velocity = cells[number-3].velocity ;
+
+
+        Eigen::Matrix<double,number-1 , 3>  temp;
+        for(int j = 1; j < number-2; j++)//单元迭代
+        {
+            double div[2] = {(cells[j-1].position - cells[j].position), (cells[j+1].position - cells[j].position)};
+            double normal[2] = {div[0] / fabs(div[0])*cells[j].faces[0]->area,
+                                div[1] / fabs(div[1])*cells[j].faces[1]->area};
+
+            // 定义守恒量和物理量的数组
+            const int numVariables = 3;  // 数组的大小
+            Eigen::Matrix<double, numVariables, 3> U;   // 守恒量，每个有3个分量
+            Eigen::Matrix<double, numVariables, 3> F;   // 物理量，每个有3个分量
+
+            // 初始化示例矩阵 M，这里假设 M 是一个 3x1 的矩阵
+
+            for (int k = 0; k < numVariables; ++k) {
+                // 当前单元的索引
+                int currentCellIndex = j - 1 + k;
+
+                // 获取当前单元的物理量
+                double rho = cells[currentCellIndex].rho;
+                double velocity = cells[currentCellIndex].velocity;
+                double energy = cells[currentCellIndex].T*717;
+                double P = cells[currentCellIndex].P;
+
+                // 计算物理量 F 和守恒量 U
+                F.col(k) << rho * velocity, rho * velocity * velocity + P, rho * velocity * energy + P * velocity;
+                U.col(k) << rho, rho * velocity, rho * energy;
+                }
+            Eigen::Matrix<double, 3, 1> M1;//对流项矩阵
+            M1 << 0.5*normal[0],
+                0.5*normal[0]+0.5*normal[1],
+                0.5*normal[1];
+            Eigen::Matrix<double, 3, 1> M2;//当地项矩阵
+            M2 << 0.25,
+                0.5,
+                0.25;
+            Eigen::MatrixXd U_j =-F * M1 *deltaT/cells[j].volume+ U* M2;
+            // cells[j].rho = U_j(0);
+            // cells[j].velocity = U_j(1)/U_j(0);
+            // cells[j].T = U_j(2)/U_j(0)/717;
+            // cells[j].P = Rg*cells[j].T*cells[j].rho;
+            temp.row(j) = U_j.transpose();
+            // std::cout <<"单元"<<j<<"的物理量，密度："<<cells[j].rho<<",速度："<<cells[j].velocity<<",温度："<<cells[j].T<<",压力："<<cells[j].P<<std::endl;
+        }
+
+        int j =0;
+        std::cout <<"单元"<<j<<"的物理量，密度："<<cells[j].rho<<",速度："<<cells[j].velocity<<",温度："<<cells[j].T<<",压力："<<cells[j].P<<std::endl;
+
+        for( j = 1; j < number-2; j++)//单元迭代
+        {
+            cells[j].rho = temp(j,0);
+            cells[j].velocity = temp(j,1)/temp(j,0);
+            cells[j].T = temp(j,2)/temp(j,0)/717;
+            cells[j].P = 0.4*cells[j].rho*cells[j].T*717;
+            // cells[j].P=0.5*cells[j-1].P+0.5*cells[j+1].P;
+            std::cout <<"单元"<<j<<"的物理量，密度："<<cells[j].rho<<",速度："<<cells[j].velocity<<",温度："<<cells[j].T<<",压力："<<cells[j].P<<std::endl;
+        }
+        j =number-2;
+        std::cout <<"单元"<<j<<"的物理量，密度："<<cells[j].rho<<",速度："<<cells[j].velocity<<",温度："<<cells[j].T<<",压力："<<cells[j].P<<std::endl;
+
+    }
+
+
+    // // double K[number-1][number-1] = {}; //构造系数矩阵
+    // Eigen::SparseMatrix<double> K(number - 1, number - 1);
+    // // std::vector<std::vector<double>> K(number - 1, std::vector<double>(number - 1, 0.0));
+    // // double F[number-1]={};//构造右端项
+    // Eigen::VectorXd F(number - 1);
+    // // std::vector<double> F(number - 1, 0.0);
+    
+
+
+    // /*初始化边界条件，通过修改右端项的第一行与最后一行实现,其中point[0]=2,point[number]=0*/
+    // {
+    //     int i = 0;
+    //     double div[2]={(faces[i].position - cells[i].position),(cells[i+1].position - cells[i].position)};
+    //     double normal[2] = {div[0]/fabs(div[0]),div[1]/fabs(div[1])};
+    //     K.insert(i,i) = -1/div[0]*normal[0] + -1/div[1]*normal[1];//系数矩阵
+    //     K.insert(i,i+1) = 1/div[1]*normal[1];
+    //     double f_In = 1/div[0] * normal[0] * faces[i].physics;
+    //     F.coeffRef(i) = 2*cells[i].volume - f_In; // assign a value to F.coeffRef(i)
+    //     std::cout <<"定义边界向量系数:"<<F.coeff(i)<<std::endl;
+        
+    // }
+    // {
+    //     int i = number - 2 ;
+    //     double div[2]={(cells[i-1].position - cells[i].position),(faces[i+1].position - cells[i].position)};
+    //     double normal[2] = {div[0]/fabs(div[0]),div[1]/fabs(div[1])};
+    //     K.insert(i,i) = -1/div[0]*normal[0] + -1/div[1]*normal[1];
+    //     K.insert(i,i-1) = 1/div[0] * normal[0];
+    //     double f_Out = 1/div[1] * faces[i+1].physics;
+    //     F.coeffRef(i) = 2*cells[i].volume - f_Out; // assign a value to F.coeffRef(i)
+    //     std::cout <<"定义边界向量系数:"<<F.coeff(i)<<std::endl;
+    // }
+
+
+
+
+    // /*初始化内部单元系数矩阵*/
+    // // for(int i = 1; i < number-2; i++)
+    // // {   
+    // //     double div[2]={(cells[i-1].position - cells[i].position),(cells[i+1].position - cells[i].position)};
+    // //     double normal[2] = {div[0]/fabs(div[0]),div[1]/fabs(div[1])};
+    // //     K.insert(i,i) =  -1/div[0]*normal[0] + -1/div[1]*normal[1];
+    // //     K.insert(i,i-1) = 1/div[0] * normal[0];
+    // //     K.insert(i,i+1) = 1/div[1] * normal[1];
+    // //     F.coeffRef(i) = 2*cells[i].volume; // assign a value to F.coeffRef(i)
+    // //     std::cout <<"方阵系数:"<< K.coeff(i,i)<<"向量系数:"<<F.coeff(i)<<std::endl;
+    // // }
+
+
+
+
+
+
+    // int num_threads=4;
+    // // std::cout << "输入并行数: ";
+    // // std::cin >> num_threads;
+
+    // // 设置并行线程数量
+    // omp_set_num_threads(num_threads);
+
+    // #pragma omp parallel for
+    // for (int i = 1; i < number-2; i++) {
+    //     double div[2] = {(cells[i-1].position - cells[i].position), (cells[i+1].position - cells[i].position)};
+    //     double normal[2] = {div[0] / fabs(div[0]), div[1] / fabs(div[1])};
+
+    //     #pragma omp critical
+    //     {
+    //         // 使用 critical 区域确保对共享数据的互斥访问
+    //         K.insert(i, i) = -1 / div[0] * normal[0] + -1 / div[1] * normal[1];
+    //         K.insert(i, i-1) = 1 / div[0] * normal[0];
+    //         K.insert(i, i+1) = 1 / div[1] * normal[1];
+    //         F.coeffRef(i) = 2 * cells[i].volume; // assign a value to F.coeffRef(i)
+
+    //         // 打印输出
+    //         // std::cout << "Thread " << omp_get_thread_num() << ": 方阵系数:" << K.coeff(i, i) << " 向量系数:" << F.coeff(i) << std::endl;
+    //     }
+    // }
+
+
+
+
+
+    // std::cout << "构造系数矩阵完成"<<std::endl; 
+    // // 进行压缩，优化存储
+    // K.makeCompressed();
+
+    // /*求解矩阵*/
+    // // gaussSolver(K,F,cells);
+    // //lu分解
+    // Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+    // solver.analyzePattern(K);
+    // solver.factorize(K);
+    // Eigen::VectorXd x = solver.solve(F);
+
+    // //赋值
+    // for (size_t i = 0; i < number-1; i++)
+    // {
+    //     cells[i].physics=x.coeff(i);
+    // }
+    
+
+
+
+    // // 写入 position 和 physics 到文件
+    // std::ostringstream oss;
+    // oss << number;
+    // std::string numberStr = oss.str();
+    // std::string filename = "cell_data_" + numberStr + ".csv";
+    // std::ofstream outFile(filename);
+    // if (!outFile.is_open()) {
+    //     std::cerr << "Error opening file for writing!" << std::endl;
+    //     return 1;
+    // }
+    // outFile << "Position,Physics" <<std::endl;
+    // // 遍历 vector，并将每个 Cell 的 position 和 physics 写入文件
+    // for (const auto& cell : cells) {
+    //     outFile << cell.position << ","<< cell.physics <<std::endl;
+    // }
+
+    // // 关闭文件
+    // outFile.close();
+    // std::cout << "Data written to file successfully." << std::endl;
+
+    return 0;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
